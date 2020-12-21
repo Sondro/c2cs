@@ -3,6 +3,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Linq;
 using System.Runtime.InteropServices;
 using ClangSharp;
 using ClangSharp.Interop;
@@ -25,53 +27,35 @@ namespace C2CS
             AddKnownTypes();
         }
 
-        public void AddAlias(TypedefDecl typeAlias)
-        {
-            var aliasTypeString = typeAlias.Spelling;
-            var underlyingType = typeAlias.UnderlyingType;
-            if (underlyingType is PointerType pointerType)
-            {
-                underlyingType = pointerType.PointeeType;
-            }
-
-            var underlyingTypeSyntax = GetTypeSyntax(underlyingType.AsString, out _, out _);
-            var underlyingTypeString = underlyingTypeSyntax.ToFullString();
-
-            // ReSharper disable once ConvertIfStatementToConditionalTernaryExpression
-            if (_typesByCNames.TryGetValue(underlyingTypeString, out var typeSyntax))
-            {
-                _typesByCNames.Add(aliasTypeString, typeSyntax);
-            }
-            else
-            {
-                _typesByCNames.Add(aliasTypeString, underlyingTypeSyntax);
-            }
-        }
-
         public ClassDeclarationSyntax CreatePInvokeClass(
             string name,
             IEnumerable<FieldDeclarationSyntax> fields,
             IEnumerable<EnumDeclarationSyntax> enums,
             IEnumerable<StructDeclarationSyntax> structs,
-            IEnumerable<MethodDeclarationSyntax> methods)
+            IEnumerable<MethodDeclarationSyntax> externMethods,
+            IEnumerable<MemberDeclarationSyntax> externFunctions)
         {
             var members = new List<MemberDeclarationSyntax>();
 
-            var libraryNameField = FieldDeclaration(
-                    VariableDeclaration(PredefinedType(Token(SyntaxKind.StringKeyword)))
-                        .WithVariables(SingletonSeparatedList(VariableDeclarator(Identifier("LibraryName"))
-                            .WithInitializer(
-                                EqualsValueClause(LiteralExpression(
-                                    SyntaxKind.StringLiteralExpression,
-                                    Literal(_libraryName)))))))
-                .WithModifiers(
-                    TokenList(Token(SyntaxKind.PrivateKeyword), Token(SyntaxKind.ConstKeyword)));
+            var libraryNameField = CreateLibraryNameField();
 
             members.Add(libraryNameField);
             members.AddRange(fields);
             members.AddRange(enums);
             members.AddRange(structs);
-            members.AddRange(methods);
+            members.AddRange(externMethods);
+            // ReSharper disable once PossibleMultipleEnumeration
+            members.AddRange(externFunctions);
+
+            // ReSharper disable once PossibleMultipleEnumeration
+            if (externFunctions.Any())
+            {
+                var loadApiMethod = CreateLoadApiMethodForDelegates(externFunctions);
+                members.Add(loadApiMethod);
+
+                var unloadApiMethod = CreateUnloadApiMethodForDelegates(externFunctions);
+                members.Add(unloadApiMethod);
+            }
 
             return ClassDeclaration(name)
                 .AddModifiers(
@@ -103,8 +87,7 @@ namespace C2CS
                 parameters.Add(parameter);
             }
 
-            method = method
-                .AddParameterListParameters(parameters.ToArray());
+            method = method.AddParameterListParameters(parameters.ToArray());
 
             return method;
         }
@@ -181,6 +164,69 @@ namespace C2CS
             @struct = @struct.AddMembers(members.ToArray());
 
             return @struct;
+        }
+
+        public DelegateDeclarationSyntax CreateExternFunctionPointer(FunctionDecl functionC)
+        {
+            var compilationUnit = ParseCompilationUnit($@"
+[EditorBrowsable(EditorBrowsableState.Never)]
+[UnmanagedFunctionPointer(CallingConvention.Winapi)]
+public delegate void d_{functionC.Name}();
+");
+            var @delegate = (DelegateDeclarationSyntax)compilationUnit.Members[0];
+            return @delegate;
+        }
+
+        public void AddAlias(TypedefDecl typeAlias)
+        {
+            var aliasTypeString = typeAlias.Spelling;
+            var underlyingType = typeAlias.UnderlyingType;
+            if (underlyingType is PointerType pointerType)
+            {
+                underlyingType = pointerType.PointeeType;
+            }
+
+            var underlyingTypeSyntax = GetTypeSyntax(underlyingType.AsString, out _, out _);
+            var underlyingTypeString = underlyingTypeSyntax.ToFullString();
+
+            // ReSharper disable once ConvertIfStatementToConditionalTernaryExpression
+            if (_typesByCNames.TryGetValue(underlyingTypeString, out var typeSyntax))
+            {
+                _typesByCNames.Add(aliasTypeString, typeSyntax);
+            }
+            else
+            {
+                _typesByCNames.Add(aliasTypeString, underlyingTypeSyntax);
+            }
+        }
+
+        private FieldDeclarationSyntax CreateLibraryNameField()
+        {
+            var compilationUnit = ParseCompilationUnit($@"
+private const string LibraryName = {"\""}{_libraryName}{"\""};
+");
+            var libraryNameField = (FieldDeclarationSyntax)compilationUnit.Members[0];
+            return libraryNameField;
+        }
+
+        private static FieldDeclarationSyntax CreateExternDelegateField(DelegateDeclarationSyntax @delegate)
+        {
+            var compilationUnit = ParseCompilationUnit($@"
+public static {@delegate.Identifier.Text} {@delegate.Identifier.Text.Substring(2)};
+");
+            var field = (FieldDeclarationSyntax)compilationUnit.Members[0];
+            return field;
+        }
+
+        private MemberDeclarationSyntax CreateLoadApiMethodForDelegates(ImmutableArray<DelegateDeclarationSyntax> delegates)
+        {
+            var compilationUnit = ParseCompilationUnit($@"
+public static {@delegate.Identifier.Text} {@delegate.Identifier.Text.Substring(2)};
+");
+        }
+
+        private MemberDeclarationSyntax CreateUnloadApiMethodForDelegates(ImmutableArray<DelegateDeclarationSyntax> delegates)
+        {
         }
 
         private MethodDeclarationSyntax CreateStructHelperCreateWrappedFieldMethod(FieldDecl fieldC, TypeSyntax structTypeSyntax)

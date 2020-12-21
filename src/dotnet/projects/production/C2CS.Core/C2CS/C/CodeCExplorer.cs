@@ -16,7 +16,7 @@ namespace C2CS
     internal class CodeCExplorer
     {
         private readonly HashSet<ClangCursor> _visitedCursors = new();
-        private string[] _includeDirectories;
+        private string[] _includeDirectories = null!;
         private string _filePath = string.Empty;
 
         public event CodeCFoundEnumDelegate? EnumFound;

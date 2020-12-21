@@ -18,6 +18,7 @@ namespace C2CS
         {
             public readonly string InputFilePath;
             public string OutputFilePath;
+            public readonly BindingsType BindingsType;
             public readonly bool IsUnattended;
             public string? LibraryName;
             public readonly IEnumerable<string>? IncludeDirectories;
@@ -27,6 +28,7 @@ namespace C2CS
             public State(
                 string inputFilePath,
                 string outputFilePath,
+                BindingsType bindingsType,
                 bool isUnattended,
                 string? libraryName,
                 IEnumerable<string>? includeDirectories,
@@ -35,6 +37,7 @@ namespace C2CS
             {
                 InputFilePath = inputFilePath;
                 OutputFilePath = outputFilePath;
+                BindingsType = bindingsType;
                 IsUnattended = isUnattended;
                 LibraryName = libraryName;
                 IncludeDirectories = includeDirectories;
@@ -114,15 +117,6 @@ namespace C2CS
                 "-Wno-pragma-once-outside-header"
             };
 
-            // TODO: Find and use default include directories
-            // macOS
-            // includeDirectories.Add("/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include");
-            // includeDirectories.Add("/usr/local/Cellar/llvm/10.0.0_3/lib/clang/10.0.0/include");
-            // Windows
-            // includeDirectories.Add("C:\Program Files (x86)\Windows Kits\10\Include\10.0.18362.0\um");
-            // includeDirectories.Add("C:\Program Files (x86)\Windows Kits\10\Include\10.0.18362.0\shared");
-            // includeDirectories.Add("C:\Program Files (x86)\Windows Kits\10\Include\10.0.18362.0\ucrt");
-
             if (_state.IncludeDirectories != null)
             {
                 commandLineArgs = commandLineArgs.Concat(_state.IncludeDirectories.Select(x => "--include-directory=" + x)).ToArray();
@@ -183,7 +177,7 @@ namespace C2CS
         {
             Console.WriteLine("Generating C# code...");
 
-            var generator = new GeneratePlatformInvokeCodeUseCase(_state.LibraryName!);
+            var generator = new GeneratePlatformInvokeCodeUseCase(_state.LibraryName!, _state.BindingsType);
             var code = generator.GenerateCode(translationUnit, _state.LibraryName!, _state.IncludeDirectories);
 
             Console.WriteLine("Generating C# code... finished");

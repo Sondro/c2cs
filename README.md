@@ -30,23 +30,49 @@ Open `./src/dotnet/C2CS.sln`
 ## Using C2CS
 
 ```
-C2CS.CommandLine:
-  C# Platform Invoke Code Generator
+c2cs:
+  C to C# (C2CS)
 
 Usage:
-  C2CS.CommandLine [options]
+  c2cs [options]
 
 Options:
-  -i, --inputFilePath <inputFilePath> (REQUIRED)      File path of the input .h file.
-  -o, --outputFilePath <outputFilePath> (REQUIRED)    File path of the output .cs file.
-  -u, --unattended                                    Don't ask for further input.
-  -l, --libraryName <libraryName>                     The name of the library. Default value is the file name of the input file path.
-  -s, --includeDirectories <includeDirectories>       Include directories to use for parsing C code.
-  -d, --defineMacros <defineMacros>                   Macros to define for parsing C code.
-  -a, --additionalArgs <additionalArgs>               Additional arguments for parsing C code.
-  --version                                           Show version information
-  -?, -h, --help                                      Show help and usage information
+  -i, --inputFilePath <inputFilePath> (REQUIRED)                     File path of the input C header file.
+  -o, --outputFilePath <outputFilePath> (REQUIRED)                   File path of the output C# file.
+  -u, --unattended                                                   Don't ask standard input for anything. Useful when you use an automated workflow. Default value
+                                                                     is to ask on standard input.
+  -t, --bindingsType <Default|Delegate|DllImport|FunctionPointer>    The type of bindings to generate. Refer to the README.md file for details. Default value is
+                                                                     `Default`.
+  -l, --libraryName <libraryName>                                    The name of the library. Default value is the file name of the input file path.
+  -s, --includeDirectories <includeDirectories>                      One or more include directories to use for parsing C code. Default value is none.
+  -d, --defineMacros <defineMacros>                                  One or more macros to define for parsing C code. Default value is none.
+  -a, --additionalArgs <additionalArgs>                              One or more additional arguments for parsing C code. Default value is none.
+  --version                                                          Show version information
+  -?, -h, --help                                                     Show help and usage information
 ```
+
+### Type of bindings
+
+Default: See `DllImport` bindings.
+
+`DllImport`: Use static methods with the `DllImportAttribute`. Available for any C# version. The advantages of using
+`DllImport` bindings are: (1) the addresses of a native exported functions are automatically resolved (happens
+on initialization of the static class for the static methods marked with `DllImportAttribute`); (2) it works with any
+version of C#. The disadvantages of using `DllImport` bindings are: (1) no fine control over loading the native library;
+(2) no fine control over loading the exported native functions; (3) can not unload the exported native functions;
+(4) can not unload the native library.
+
+`Delegate`: Use static fields of type delegates which can be invoked where each delegate is marked with
+the `UnmanagedFunctionPointerAttribute`. Available for any C# version. The advantages of using `Delegate` bindings are:
+(1) fine control over loading the native library; (2) fine control over loading the exported native functions; (3)
+fine control over unloading the exported native functions; (4) fine control over unloading the native library. The
+disadvantages of using `Delegate` bindings are: (1) no automatic loading of the native library; (2) no automatic loading
+of the exported native functions; (3) delegates are object instances which allocate memory and thus are tracked by the
+Garbage Collector (GC). Two static methods, (1) `LoadApi` and (2) `UnloadApi`, are automatically generated to
+help with the disadvantages. However, the `LoadApi` method still needs the path of the native library as input.
+
+`FunctionPointer`: Use unmanaged function pointers [new to C# 9](https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/proposals/csharp-9.0/function-pointers). The advantages of using `FunctionPointer` bindings are: (1) fine control over loading the native library; (2) fine control over loading the exported native functions; (3)
+fine control over unloading the exported native functions; (4) fine control over unloading the native library; (5) no memory is allocated and tracked by the Garbage Collector (GC). The disadvantages of using `FunctionPointer` bindings are: (1) no automatic loading of the native library; (2) no automatic loading of the exported native functions. Two static methods, (1) `LoadApi` and (2) `UnloadApi`, are automatically generated to help with the disadvantages. However, the `LoadApi` method still needs the path of the native library as input.
 
 ## Examples
 

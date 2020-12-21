@@ -13,25 +13,24 @@ namespace C2CS
         public static ClassDeclarationSyntax Format(this ClassDeclarationSyntax rootNode)
         {
             rootNode = rootNode
-                .NormalizeWhitespace()
-                .TwoNewLinesForLastField()
-                .RemoveLeadingTriviaForPointers()
-                .AddSpaceTriviaForPointers()
-                .TwoNewLinesForEveryExternMethodExceptLast()
-                .TwoNewLinesForEveryStructFieldExceptLast();
+                    .NormalizeWhitespace()
+                    .TwoNewLinesForLibraryNameField()
+                    .RemoveLeadingTriviaForPointers()
+                    .AddSpaceTriviaForPointers()
+                    .TwoNewLinesForEveryExternMethodExceptLast()
+                    .TwoNewLinesForEveryExternDelegateExceptLast()
+                    .TwoNewLinesForEveryStructFieldExceptLast()
+                ;
             return rootNode;
         }
 
-        private static TNode TwoNewLinesForLastField<TNode>(this TNode rootNode)
+        private static TNode TwoNewLinesForLibraryNameField<TNode>(this TNode rootNode)
             where TNode : SyntaxNode
         {
-            var lastField = rootNode.ChildNodes().OfType<FieldDeclarationSyntax>().Last();
-            var lastNode = rootNode.ChildNodes().Last();
-            if (lastNode != lastField)
-            {
-                rootNode = rootNode.ReplaceNode(lastField, lastField
-                    .WithTrailingTrivia(CarriageReturnLineFeed, CarriageReturnLineFeed));
-            }
+            var firstField = rootNode.ChildNodes().OfType<FieldDeclarationSyntax>().First();
+
+            rootNode = rootNode.ReplaceNode(firstField, firstField
+                .WithTrailingTrivia(CarriageReturnLineFeed, CarriageReturnLineFeed));
 
             return rootNode;
         }
@@ -77,6 +76,33 @@ namespace C2CS
                     return trailingTrivia.Count == 0
                         ? method.WithTrailingTrivia(triviaToAdd)
                         : method.InsertTriviaAfter(trailingTrivia.Last(), triviaToAdd);
+                });
+        }
+
+        private static TNode TwoNewLinesForEveryExternDelegateExceptLast<TNode>(this TNode rootNode)
+            where TNode : SyntaxNode
+        {
+            var delegates = rootNode.ChildNodes().OfType<DelegateDeclarationSyntax>().ToArray();
+            var lastNode = rootNode.ChildNodes().Last();
+            return rootNode.ReplaceNodes(
+                delegates,
+                (_, @delegate) =>
+                {
+                    if (@delegate == lastNode)
+                    {
+                        return @delegate;
+                    }
+
+                    var triviaToAdd = new[]
+                    {
+                        CarriageReturnLineFeed
+                    };
+
+                    var trailingTrivia = @delegate.GetTrailingTrivia();
+
+                    return trailingTrivia.Count == 0
+                        ? @delegate.WithTrailingTrivia(triviaToAdd)
+                        : @delegate.InsertTriviaAfter(trailingTrivia.Last(), triviaToAdd);
                 });
         }
 
